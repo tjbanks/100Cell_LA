@@ -12,6 +12,7 @@ from tempfile import mkstemp
 from shutil import move
 import os
 from os import fdopen, remove
+from random import randint
 
 import pandas as pd
 import paramiko
@@ -441,10 +442,13 @@ def parameters_page(root):
         run_command_in_console("Running code locally...", comment=True)
     
     def run_server():
+        runServerButton.config(state=tk.DISABLED)
         port = 22
-        testing = True
+        testing = False
         batch_file = "batch_file.sh"
-        zip_file = '../code.zip'
+        zip_dir = '100Cell_LA_RUN_RESULTS-'+str(randint(0, 9999))
+        zip_file = zip_dir+'.zip'
+        remote_dir = "100Cell_LA_remote"
         
         save_params()
         run_command_in_console("Initiating remote server process...", comment=True)
@@ -465,11 +469,11 @@ def parameters_page(root):
                 for file in files:
                     ziph.write(os.path.join(root, file))
         
-        zipf = zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED)
+        zipf = zipfile.ZipFile("../"+zip_file, 'w', zipfile.ZIP_DEFLATED)
         dir_path = "."
         zipdir(dir_path, zipf)
         zipf.close()
-        run_command_in_console("Code written to {}".format(zip_file), comment=True)
+        run_command_in_console("Code written to {}".format("../"+zip_file), comment=True)
         
         
         
@@ -477,33 +481,115 @@ def parameters_page(root):
         try:
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.load_system_host_keys()
             password = d.password.get()
+            
             if(password is "INPUT"):
                 password = getpass.getpass('Password for %s@%s: ' % (d.user.get(), d.hostname.get()))
             if(not testing):
-                client.connect(d.hostname.get(), port, d.user.get(), password)
+                print("keyfile: " + d.keyfile.get())
+                if(d.keyfile.get() == 'NONE'):
+                    print("no keyfile")
+                    client.connect(d.hostname.get(), port=port, username=d.user.get(), password=password)
+                else:
+                    k = paramiko.RSAKey.from_private_key_file(d.keyfile.get(), password)
+                    client.connect(d.hostname.get(), port=port, username=d.user.get(), pkey=k)
+                #chan.close()
+                #client.close()
             
-                chan = client.invoke_shell()
-                
-                chan.close()
-                client.close()
             
             
             run_command_in_console("Uploading code to {}".format(d.hostname.get()), comment=True)
+            client.exec_command('mkdir '+ remote_dir)
+            rem_loc = "./"+remote_dir+"/"+zip_file
+            print(rem_loc)
+            ftp_client=client.open_sftp()
+            ftp_client.put("../"+zip_file,rem_loc)
+            ftp_client.close()
             
-            run_command_in_console("Unzipping code ", comment=True, cons=d.hostname.get())
+            os.remove("../"+zip_file)
             
-            run_command_in_console("Running code ", comment=True, cons=d.hostname.get())
+            run_command_in_console("Unzipping and running code ", comment=True, cons=d.hostname.get())
+            
+            #chan = client.invoke_shell()
+            #unzip -o -d file file.zip
+            command = 'unzip -o -d '+remote_dir+'/'+zip_dir+' '+remote_dir+'/'+zip_file
+            print("Executing {}".format( command ))
+            stdin , stdout, stderr = client.exec_command(command)
+            exit_status = stdout.channel.recv_exit_status()          # Blocking call
+            if exit_status == 0:
+                print ("executed")
+            else:
+                print("Error", exit_status)
+                
+            command = remote_dir+'/'+zip_dir+'/'+batch_file
+            print("Executing {}".format( command ))
+            stdin , stdout, stderr = client.exec_command(command)
+            exit_status = stdout.channel.recv_exit_status()          # Blocking call
+            if exit_status == 0:
+                print ("executed")
+            else:
+                print("Error", exit_status)
+                for line in stderr.readlines():
+                    print(line)
+                    
+                    
+            #######################
+            #KEEP CHECKING TO SEE IF DONE
+            
+            
+            #######################
             
             run_command_in_console("Code run complete. Compressing results.", comment=True, cons=d.hostname.get())
             
+            command = 'rm -rf '+remote_dir+'/'+zip_file
+            print("Executing {}".format( command ))
+            stdin , stdout, stderr = client.exec_command(command)
+            exit_status = stdout.channel.recv_exit_status()          # Blocking call
+            if exit_status == 0:
+                print ("executed")
+            else:
+                print("Error", exit_status)
+            
+            command = "zip -r "+remote_dir+'/'+zip_file+" "+remote_dir+"/"+zip_dir
+            print("Executing {}".format( command ))
+            stdin , stdout, stderr = client.exec_command(command)
+            exit_status = stdout.channel.recv_exit_status()          # Blocking call
+            if exit_status == 0:
+                print ("executed")
+            else:
+                print("Error", exit_status)
+                for line in stderr.readlines():
+                    print(line)
+                    
             run_command_in_console("Downloading results ", comment=True)
+            rem_loc = "./"+remote_dir+"/"+zip_file
+            ftp_client=client.open_sftp()
+            ftp_client.get(rem_loc,"../"+zip_file)
+            ftp_client.close()
             
-            run_command_in_console("Results saved to:  ", comment=True)
+            zip_ref = zipfile.ZipFile("../"+zip_file, 'r')
+            zip_ref.extractall("../"+zip_dir)
+            zip_ref.close()
+                        
+            os.remove("../"+zip_file)
             
+            run_command_in_console("Results saved to parent directory in folder: {}".format(zip_dir), comment=True)
+            
+            
+            run_command_in_console("Cleaning up files", comment=True, cons=d.hostname.get())
+            
+            command = 'rm -rf '+remote_dir+'/'+zip_dir+'*'
+            print("Executing {}".format( command ))
+            stdin , stdout, stderr = client.exec_command(command)
+            exit_status = stdout.channel.recv_exit_status()          # Blocking call
+            if exit_status == 0:
+                print ("executed")
+            else:
+                print("Error", exit_status)
+                
             run_command_in_console("Disconnecting from : {}".format(d.hostname.get()), comment=True)
-        
+            client.close()
+            
         except Exception as e:
             run_command_in_console('*** Caught exception: %s: %s' % (e.__class__, e))
             #traceback.print_exc()
@@ -514,7 +600,7 @@ def parameters_page(root):
         
         run_command_in_console("", comment=True)
         run_command_in_console("Remote server process complete ", comment=True)
-        
+        runServerButton.config(state=tk.NORMAL)
         #########
         
     

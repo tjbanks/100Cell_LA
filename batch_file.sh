@@ -3,8 +3,8 @@
 #  SBATCH CONFIG
 #-------------------------------------------------------------------------------
 ## resources
-#SBATCH -p RC,Lewis
-#SBATCH -N 3
+#SBATCH -p knl
+#SBATCH -N 2
 ##SBATCH -A TG-CCR140046 #For XSEDE?
 #SBATCH -n 40
 

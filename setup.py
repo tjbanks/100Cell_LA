@@ -11,7 +11,7 @@ base = None
 
 executables = [Executable("100Cell.py", base=base)]
 
-packages = ["idna","re","subprocess","threading","tempfile","shutil","os","tkinter"]
+packages = ["idna","re","subprocess","threading","tempfile","shutil","os","random","numpy","pandas","paramiko","getpass","zipfile","tkinter"]
 options = {
     'build_exe': {    
         'packages':packages,
@@ -19,9 +19,9 @@ options = {
 }
 
 setup(
-    name = "<any name>",
+    name = "100Cell_LA",
     options = options,
-    version = "<any number>",
+    version = "1",
     description = '<any description>',
     executables = executables
 )
