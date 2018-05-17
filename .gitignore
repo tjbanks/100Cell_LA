@@ -1,0 +1,10 @@
+build/
+lib/
+mpl-data/
+tcl/
+tk/
+*.dll
+*.c
+*.o
+*.exe
+*.pyd

@@ -4,7 +4,7 @@ Created on Wed May 16 08:18:30 2018
 
 @author: tjbanks
 """
-
+import time
 import re
 import subprocess
 import threading
@@ -193,11 +193,10 @@ def parameters_page(root):
         
         return
     #TODO THREADING IS A WIP, need to convert everything to classes first to ensure we only run 1 at a time
-    def run_command_in_console_threaded(command):
-        import threading
-        t1 = threading.Thread(target=lambda r=command:run_command_in_console(r))
+    def run_command_in_console_threaded(command, comment=False, cons="console"):
+        t1 = threading.Thread(target=lambda r=command,cm=comment,co=cons:run_command_in_console(r,cm,co))
         t1.start()
-        return
+        return t1
     
     def replace(file_path, pattern, subst):
                 #Create temp file
@@ -207,6 +206,7 @@ def parameters_page(root):
                     with open(file_path) as old_file:
                         for line in old_file:
                             line = re.sub(r"{}".format(pattern), subst, line)
+                            line.replace("\n", "")
                             new_file.write(line)
                 #Remove original file
                 remove(file_path)
@@ -441,6 +441,17 @@ def parameters_page(root):
         save_params()
         run_command_in_console("Running code locally...", comment=True)
     
+    
+    class ThreadedTask(threading.Thread):
+        def __init__(self, method):
+            threading.Thread.__init__(self)
+            self.method = method
+        def run(self):
+            self.method()
+            
+    def run_server_thread():
+        ThreadedTask(run_server).start()
+    
     def run_server():
         runServerButton.config(state=tk.DISABLED)
         port = 22
@@ -467,14 +478,14 @@ def parameters_page(root):
             # ziph is zipfile handle
             for root, dirs, files in os.walk(path):
                 for file in files:
-                    ziph.write(os.path.join(root, file))
+                    if(root is '.' and '.dll' not in file and 'serverparams' not in file and '.py' not in file and d.keyfile.get() not in file and '.pdf' not in file): #only want files in root dir and not dll
+                        ziph.write(os.path.join(root, file))
         
         zipf = zipfile.ZipFile("../"+zip_file, 'w', zipfile.ZIP_DEFLATED)
         dir_path = "."
         zipdir(dir_path, zipf)
         zipf.close()
         run_command_in_console("Code written to {}".format("../"+zip_file), comment=True)
-        
         
         
         run_command_in_console("Connecting to {}...".format(d.hostname.get()), comment=True)
@@ -501,7 +512,7 @@ def parameters_page(root):
             run_command_in_console("Uploading code to {}".format(d.hostname.get()), comment=True)
             client.exec_command('mkdir '+ remote_dir)
             rem_loc = "./"+remote_dir+"/"+zip_file
-            print(rem_loc)
+            #print(rem_loc)
             ftp_client=client.open_sftp()
             ftp_client.put("../"+zip_file,rem_loc)
             ftp_client.close()
@@ -513,30 +524,54 @@ def parameters_page(root):
             #chan = client.invoke_shell()
             #unzip -o -d file file.zip
             command = 'unzip -o -d '+remote_dir+'/'+zip_dir+' '+remote_dir+'/'+zip_file
-            print("Executing {}".format( command ))
+            #print("Executing {}".format( command ))
             stdin , stdout, stderr = client.exec_command(command)
             exit_status = stdout.channel.recv_exit_status()          # Blocking call
             if exit_status == 0:
-                print ("executed")
+                print ("executed " + command)
             else:
-                print("Error", exit_status)
+                print("Error executing " + command + " Error: " , exit_status)
                 
-            command = remote_dir+'/'+zip_dir+'/'+batch_file
-            print("Executing {}".format( command ))
+            command = 'sbatch ' + remote_dir+'/'+zip_dir+'/'+batch_file
+            #print("Executing {}".format( command ))
             stdin , stdout, stderr = client.exec_command(command)
             exit_status = stdout.channel.recv_exit_status()          # Blocking call
+            batch_id = '-1'
             if exit_status == 0:
-                print ("executed")
+                print ("executed " + command)
+                batch_id = stdout.readline()
+                batch_id = batch_id.replace("Submitted batch job ", "")
+                batch_id = batch_id.replace("\n", "")
             else:
-                print("Error", exit_status)
+                print("Error executing " + command + " Error: " , exit_status)
                 for line in stderr.readlines():
                     print(line)
                     
-                    
+            #Submitted batch job 18214
+            print('running sbatch process: ' + batch_id)
+
             #######################
             #KEEP CHECKING TO SEE IF DONE
-            
-            
+            done = False
+            command = 'squeue'
+            while(not done):
+                stdin , stdout, stderr = client.exec_command(command)
+                exit_status = stdout.channel.recv_exit_status()          # Blocking call
+                if exit_status == 0:
+                    #print("Checking for completion of " + batch_id + " with " + command)
+                    lines = stdout.readlines()
+                    done = True
+                    for line in lines:
+                        if(batch_id in line):
+                            done = False
+                else:
+                    print("Error", exit_status)
+                    for line in stderr.readlines():
+                        print(line)
+                if(not done):
+                    run_command_in_console("sbatch process " + batch_id + " still running. Checking again in 5 seconds...", comment=True, cons=d.hostname.get())
+                    time.sleep(5)
+                    #command = './squeue-done'
             #######################
             
             run_command_in_console("Code run complete. Compressing results.", comment=True, cons=d.hostname.get())
@@ -550,7 +585,7 @@ def parameters_page(root):
             else:
                 print("Error", exit_status)
             
-            command = "zip -r "+remote_dir+'/'+zip_file+" "+remote_dir+"/"+zip_dir
+            command = "zip -r "+remote_dir+'/'+zip_file+" "+remote_dir+"/"+zip_dir + " -i " + "'*.m' '*.mat' '*.txt' '*.out' '*.dat' '*data*' '*Matrix_NEW*'"
             print("Executing {}".format( command ))
             stdin , stdout, stderr = client.exec_command(command)
             exit_status = stdout.channel.recv_exit_status()          # Blocking call
@@ -619,7 +654,7 @@ def parameters_page(root):
     runLocalButton.grid(column=0, row =1, padx=5, pady=5, sticky='WE')
     runLocalButton.config(state=tk.DISABLED)
     
-    runServerButton = tk.Button(top_option_frame, text="Save and Run on Remote Server", command=run_server)
+    runServerButton = tk.Button(top_option_frame, text="Save and Run on Remote Server", command=run_server_thread)
     runServerButton.grid(column=1, row =1, padx=5, pady=5, sticky='WE')
     #runServerButton.config(state=tk.DISABLED)
     

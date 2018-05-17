@@ -11,7 +11,7 @@ base = None
 
 executables = [Executable("100Cell.py", base=base)]
 
-packages = ["idna","re","subprocess","threading","tempfile","shutil","os","random","numpy","pandas","paramiko","getpass","zipfile","tkinter"]
+packages = ["idna","time","re","subprocess","threading","tempfile","shutil","os","random","numpy","pandas","paramiko","getpass","zipfile","tkinter"]
 options = {
     'build_exe': {    
         'packages':packages,
@@ -22,6 +22,6 @@ setup(
     name = "100Cell_LA",
     options = options,
     version = "1",
-    description = '<any description>',
+    description = '100Cell_LA Nair Lab (Banks)',
     executables = executables
 )
