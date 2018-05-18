@@ -14,6 +14,7 @@ import os
 from os import fdopen, remove
 from random import randint
 from nsgclient import Client
+import tarfile
 
 import pandas as pd
 import paramiko
@@ -196,17 +197,17 @@ def parameters_page(root):
         #display_app_status('Command Running')
         
         return
-    #TODO THREADING IS A WIP, need to convert everything to classes first to ensure we only run 1 at a time
+
     def run_command_in_console_threaded(command, comment=False, cons="console"):
         t1 = threading.Thread(target=lambda r=command,cm=comment,co=cons:run_command_in_console(r,cm,co))
         t1.start()
         return t1
     
-    def replace(file_path, pattern, subst):
+    def replace(file_path, pattern, subst,unix_end=False):
                 #Create temp file
                 #print("searching for: {}".format(pattern))
                 fh, abs_path = mkstemp()
-                with fdopen(fh,'w') as new_file:
+                with fdopen(fh,'w',newline="\n") as new_file:
                     with open(file_path) as old_file:
                         for line in old_file:
                             line = re.sub(r"{}".format(pattern), subst, line)
@@ -399,7 +400,6 @@ def parameters_page(root):
             self.use_ssh.set(params_pd[self.column_names[12]].get(0))
             
         def save_file(self):
-            nsg_file = "pycipres.conf"
             d = [self.hostname.get(), self.user.get(),\
                   self.password.get(), self.keyfile.get(),\
                   self.partition.get(), self.nodes.get(),\
@@ -411,21 +411,6 @@ def parameters_page(root):
             df.transpose().to_csv(self.params_file, sep=';',\
                            header=None,index=False)
             
-            """pycipres.conf
-            APPNAME:app-name
-            APPID:app-id
-            USERNAME:user
-            PASSWORD:pass
-            URL:https://nsgr.sdsc.edu:8443/cipresrest/v1
-            
-            with open(nsg_file, 'w') as the_file:
-                the_file.write('{}:{}\n'.format("APPNAME",self.nsg_app_name.get()))
-                the_file.write('{}:{}\n'.format("APPID",self.nsg_app_id.get()))
-                the_file.write('{}:{}\n'.format("USERNAME",self.nsg_user.get()))
-                the_file.write('{}:{}\n'.format("PASSWORD",self.nsg_password.get()))
-                the_file.write('{}:{}\n'.format("URL",self.nsg_url.get()))
-            return
-            """
         
         def verify_good(self):
             return True
@@ -591,6 +576,8 @@ def parameters_page(root):
         nsg_template_param_file = "param.properties"
         nsg_template_input_file = "input.properties"
         current_folder = "."
+        zip_dir_nsg_return = zip_dir+'-nsg-return'
+        
         
         save_params()
         run_command_in_console("Initiating remote server process...", comment=True)
@@ -598,9 +585,9 @@ def parameters_page(root):
         ###SSH###
         d = ServerEntryBox(root,display=False)
         run_command_in_console("Writing parameters to batch file", comment=True)
-        replace(batch_file, "#SBATCH -p " + "(.*)", "{}{}".format("#SBATCH -p ", d.partition.get()))
-        replace(batch_file, "#SBATCH -N " + "(.*)", "{}{}".format("#SBATCH -N ", d.nodes.get()))
-        replace(batch_file, "#SBATCH -n " + "(.*)", "{}{}".format("#SBATCH -n ", d.cores.get()))
+        replace(batch_file, "#SBATCH -p " + "(.*)", "{}{}".format("#SBATCH -p ", d.partition.get()),unix_end=True)
+        replace(batch_file, "#SBATCH -N " + "(.*)", "{}{}".format("#SBATCH -N ", d.nodes.get()),unix_end=True)
+        replace(batch_file, "#SBATCH -n " + "(.*)", "{}{}".format("#SBATCH -n ", d.cores.get()),unix_end=True)
         
                 
                 
@@ -621,10 +608,11 @@ def parameters_page(root):
 #NSG####################################        
         if(d.use_ssh.get() is "0"):#NSG
             try:
+                            
                 run_command_in_console("Connecting to NSG using API URL {}".format(d.nsg_url.get()), comment=True)
                 
                 nsg = Client(d.nsg_app_name.get(), d.nsg_app_id.get(), d.nsg_user.get(), d.nsg_password.get(), d.nsg_url.get())
-                run_command_in_console("Listing Templates Stored: {}".format(nsg.listJobs()))
+                run_command_in_console("Listing Templates Stored: {}".format(nsg.listJobs()),comment=True)
                 
                 
                 run_command_in_console("Creating NSG Job", comment=True)
@@ -641,7 +629,7 @@ def parameters_page(root):
                     the_file.write('{}={}\n'.format("number_nodes_",d.nodes.get()))
                     the_file.write('{}={}\n'.format("number_cores_",d.cores.get()))
                     the_file.write('{}={}\n'.format("pythonoption_","0"))
-                    the_file.write('{}={}\n'.format("outputfilename_",zip_dir+'-nsg-return'))
+                    the_file.write('{}={}\n'.format("outputfilename_",zip_dir_nsg_return))
                     the_file.write('{}={}\n'.format("runtime_","1"))
                     the_file.write('{}={}\n'.format("singlelayer_","0")) 
                     
@@ -667,11 +655,19 @@ def parameters_page(root):
                 run_command_in_console("Downloading results from NSG", comment=True)
                 #store file in parent directory
                 status.downloadResults(directory="../")
-                run_command_in_console("Extracted results in parent directory", comment=True)
+                
+                run_command_in_console("Extracting results", comment=True)
+                nsg_tar_returned = zip_dir_nsg_return+".tar.gz"
+                tar = tarfile.open("../"+nsg_tar_returned,"r:gz")
+                tar.extractall(path="../"+zip_dir_nsg_return+"/")
+                tar.close()
+                os.remove("../"+nsg_tar_returned)
+                run_command_in_console("Extracted results to " + zip_dir_nsg_return + "in parent directory", comment=True)
                 
                 run_command_in_console("Closing connection to NSG", comment=True)
+                #just by not using the object it's technically closed
             except Exception as e:
-                run_command_in_console("Error, Exception caught: {}\n\n".format(e))
+                run_command_in_console("Error, Exception caught: {}\n\n".format(e), comment=True)
             
 #SSH######################################
         else:#SSH
@@ -710,7 +706,7 @@ def parameters_page(root):
                 
                 #chan = client.invoke_shell()
                 #unzip -o -d file file.zip
-                command = 'unzip -o -d '+remote_dir+'/'+zip_dir+' '+remote_dir+'/'+zip_file
+                command = 'unzip -o -d '+remote_dir+' '+remote_dir+'/'+zip_file
                 #print("Executing {}".format( command ))
                 stdin , stdout, stderr = client.exec_command(command)
                 exit_status = stdout.channel.recv_exit_status()          # Blocking call
@@ -718,8 +714,9 @@ def parameters_page(root):
                     print ("executed " + command)
                 else:
                     print("Error executing " + command + " Error: " , exit_status)
-                    
-                command = 'sbatch ' + remote_dir+'/'+zip_dir+'/'+batch_file
+                
+                                
+                command = 'cd ' + remote_dir+'/'+zip_dir+' && sbatch '+batch_file+ ' && cd ~' #We want to execute from that dir
                 #print("Executing {}".format( command ))
                 stdin , stdout, stderr = client.exec_command(command)
                 exit_status = stdout.channel.recv_exit_status()          # Blocking call
@@ -814,7 +811,7 @@ def parameters_page(root):
                 #END SSH CLIENT
             
             except Exception as e:
-                run_command_in_console('*** Caught exception: %s: %s' % (e.__class__, e))
+                run_command_in_console('*** Caught exception: %s: %s' % (e.__class__, e),comment=True)
                 #traceback.print_exc()
                 try:
                     client.close()

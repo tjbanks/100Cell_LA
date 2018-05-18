@@ -219,7 +219,8 @@ class Client(object):
         """ Returns xml text or throws a CipresError """
         r = requests.get(url, auth=(self.username, self.password), verify=False, headers = self.headers, stream=stream);
         if verbose:
-            print("GET %s\nStatus = %d\nText:%s\n" % (url, r.status_code, r.text))
+            #print("GET %s\nStatus = %d\nText:%s\n" % (url, r.status_code, r.text))
+            print("Verbose logging for downloads suppressed in the code")
         if r.status_code != 200:
             self.__raiseException__(r);
         return r
