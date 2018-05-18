@@ -278,7 +278,7 @@ def parameters_page(root):
             l.grid(row=4,column=0,pady=5,padx=5)
             l.config(relief=tk.GROOVE)
             
-            self.pass_e = tk.Entry(conn_option_frame,width=25,textvariable=self.password)
+            self.pass_e = tk.Entry(conn_option_frame,width=25,show="*",textvariable=self.password)
             self.pass_e.grid(row=4,column=1,padx=5)
             
             l = tk.Label(conn_option_frame, text='Private Key',width=15, background='light gray')
@@ -309,7 +309,7 @@ def parameters_page(root):
             l.grid(row=4,column=0,pady=5,padx=5)
             l.config(relief=tk.GROOVE)
             
-            self.nsg_pass_e = tk.Entry(nsgconn_option_frame,width=25,textvariable=self.nsg_password)
+            self.nsg_pass_e = tk.Entry(nsgconn_option_frame,width=25,show="*",textvariable=self.nsg_password)
             self.nsg_pass_e.grid(row=4,column=1,padx=5)
                                     
             l = tk.Label(nsgconn_option_frame, text='Application Name',width=15, background='light gray')
@@ -595,14 +595,14 @@ def parameters_page(root):
                 copyfile(src, dst)
                 #generate new properties
                 with open(os.path.join(nsg_template_dir,nsg_template_input_file), 'w') as the_file:
-                    the_file.write('{}={}\n'.format("infile_",zip_file))
+                    the_file.write('{}={}\n'.format("infile_",'./'+zip_file))
                 with open(os.path.join(nsg_template_dir,nsg_template_param_file), 'w') as the_file:
                     the_file.write('{}={}\n'.format("toolId","NEURON75_TG"))
                     the_file.write('{}={}\n'.format("filename_","./main.hoc"))
                     the_file.write('{}={}\n'.format("number_nodes_",d.nodes.get()))
                     the_file.write('{}={}\n'.format("number_cores_",d.cores.get()))
                     the_file.write('{}={}\n'.format("pythonoption_","0"))
-                    the_file.write('{}={}\n'.format("outputfilename_",zip_dir))
+                    the_file.write('{}={}\n'.format("outputfilename_",zip_dir+'-nsg-return'))
                     the_file.write('{}={}\n'.format("runtime_","1"))
                     the_file.write('{}={}\n'.format("singlelayer_","0")) 
                     

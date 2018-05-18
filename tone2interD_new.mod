@@ -203,6 +203,10 @@ PARAMETER {
 
 
 
+
+
+
+
 	fmax = 2.63 : 3.8 : 4 : 3
 	fmin = .8	
 	

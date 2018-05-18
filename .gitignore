@@ -8,3 +8,5 @@ tk/
 *.o
 *.exe
 *.pyd
+*.zip
+serverparams.csv
