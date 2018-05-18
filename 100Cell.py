@@ -179,7 +179,7 @@ def parameters_page(root):
         except Exception as e:
             return iter(str(e).splitlines())
         
-    def run_command_in_console(command, comment=False, shell=False, cons="console"):
+    def run_command_in_console(command, comment=False, shell=True, cons="console"):
         console.configure(state='normal')
         console.insert('end', '{} > '.format(cons) + command + '\n')
         if(not comment):
@@ -553,6 +553,20 @@ def parameters_page(root):
         runLocalButton.config(state=tk.NORMAL)
         runServerButton.config(state=tk.NORMAL)
     
+    def delete_all_nsg_threaded():
+        result = messagebox.askquestion("Delete all NSG Templates", "Are you sure you want to delete all templates stored on NSG? This action is irreversable and will stop anything you're currently running.", icon='warning')
+        if result != 'yes':
+            return
+        
+        ThreadedTask(delete_all_nsg).start()
+        
+    def delete_all_nsg():
+        d = ServerEntryBox(root,display=False)
+        nsg = Client(d.nsg_app_name.get(), d.nsg_app_id.get(), d.nsg_user.get(), d.nsg_password.get(), d.nsg_url.get())
+        run_command_in_console("Deleting Jobs...", comment=True)
+        for job in nsg.listJobs():
+            job.delete()
+        run_command_in_console("Done.", comment=True)
     
     class ThreadedTask(threading.Thread):
         def __init__(self, method):
@@ -576,6 +590,7 @@ def parameters_page(root):
         nsg_template_dir = "nsg-template-dir"
         nsg_template_param_file = "param.properties"
         nsg_template_input_file = "input.properties"
+        current_folder = "."
         
         save_params()
         run_command_in_console("Initiating remote server process...", comment=True)
@@ -594,21 +609,22 @@ def parameters_page(root):
             # ziph is zipfile handle
             for root, dirs, files in os.walk(path):
                 for file in files:
-                    if(root is '.' and '.dll' not in file and 'serverparams' not in file and '.py' not in file and d.keyfile.get() not in file and '.pdf' not in file): #only want files in root dir and not dll
-                        ziph.write(os.path.join(root, file))
+                    if((root is '.' or root == current_folder) and '.dll' not in file and 'serverparams' not in file and '.py' not in file and d.keyfile.get() not in file and '.pdf' not in file): #only want files in root dir and not dll
+                        ziph.write(os.path.join(root, file), arcname=os.path.join(zip_dir,file))
         
         zipf = zipfile.ZipFile("../"+zip_file, 'w', zipfile.ZIP_DEFLATED)
-        dir_path = "."
+        dir_path = current_folder
         zipdir(dir_path, zipf)
         zipf.close()
         run_command_in_console("Code written to {}".format("../"+zip_file), comment=True)
+        
 #NSG####################################        
         if(d.use_ssh.get() is "0"):#NSG
             try:
                 run_command_in_console("Connecting to NSG using API URL {}".format(d.nsg_url.get()), comment=True)
                 
                 nsg = Client(d.nsg_app_name.get(), d.nsg_app_id.get(), d.nsg_user.get(), d.nsg_password.get(), d.nsg_url.get())
-                run_command_in_console("Listing Current Jobs: {}".format(nsg.listJobs()))
+                run_command_in_console("Listing Templates Stored: {}".format(nsg.listJobs()))
                 
                 
                 run_command_in_console("Creating NSG Job", comment=True)
@@ -633,15 +649,15 @@ def parameters_page(root):
                 run_command_in_console("Validating job, waiting for completion...", comment=True)
                 status = nsg.validateJobTemplate(nsg_template_dir)
                 #status.waitForCompletion(pollInterval=10)
-                run_command_in_console("Error?: " + str(status.isError()))
+                run_command_in_console("Error?: " + str(status.isError()), comment=True)
                 #submit
                 run_command_in_console("Validating complete...", comment=True)
                 run_command_in_console("Starting job", comment=True)
                 status = nsg.submitJobTemplate(nsg_template_dir,metadata={"statusEmail" : "false"})
                 
-                run_command_in_console("Waiting for job to complete, checking every 60 seconds. Please wait, this may take a while.", comment=True)
+                run_command_in_console("Waiting for job to complete, checking every 60 seconds. Please wait, this may take a while. (You can watch detailed debug progress in the command prompt)", comment=True)
                 status.waitForCompletion(pollInterval=60)
-                run_command_in_console("Error?: " + str(status.isError()))
+                run_command_in_console("Error?: " + str(status.isError()), comment=True)
                 
                 run_command_in_console("Job Complete", comment=True)
                 #delete zip files in parent directory and in nsg-template-dir
@@ -829,6 +845,10 @@ def parameters_page(root):
     
     runServerButton = tk.Button(top_option_frame, text="Save and Run on Remote Server", command=run_server_thread)
     runServerButton.grid(column=1, row =1, padx=5, pady=5, sticky='WE')
+    #runServerButton.config(state=tk.DISABLED)
+    
+    deleteNsgButton = tk.Button(top_option_frame, text="Delete all NSG Jobs", command=delete_all_nsg_threaded)
+    deleteNsgButton.grid(column=0, row =2, padx=5, pady=5, sticky='WE')
     #runServerButton.config(state=tk.DISABLED)
     
     

@@ -4,9 +4,9 @@
 #-------------------------------------------------------------------------------
 ## resources
 #SBATCH -p knl
-#SBATCH -N 2
+#SBATCH -N 1
 ##SBATCH -A TG-CCR140046 #For XSEDE?
-#SBATCH -n 12
+#SBATCH -n 10
 
 #SBATCH --time 0-01:00  # days-hours:minutes
 #SBATCH --qos=normal
