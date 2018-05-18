@@ -484,7 +484,9 @@ def parameters_page(root):
         
         
         def save_replacement(self):
-            replace(self.file_name, self.search_for+"(.*)", "{}{}".format(self.search_for, self.v_value.get()))
+            val = self.v_value.get()
+            val = val.replace("\n","")
+            replace(self.file_name, self.search_for+"(.*)", "{}{}".format(self.search_for, val))
               
         def reset(self):
             self.v_value.set(self.original_value)
