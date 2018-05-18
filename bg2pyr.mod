@@ -167,6 +167,24 @@ PARAMETER {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	:NMDA
 	taun1 = 5 (ms)
 	taun2 = 125 (ms)

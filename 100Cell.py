@@ -169,24 +169,27 @@ def parameters_page(root):
     #console.insert('end', 'console > ')
     console.configure(state='disabled')
     
-    def run_command(command):
+    def run_command(command,shell=False):
         try:
-            p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            return iter(p.stdout.readline, b'')
+            p = subprocess.Popen(command, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if(p.returncode==0):
+                return iter(p.stdout.readline, b'')
+            else:
+                return iter(p.stderr.readline, b'')
         except Exception as e:
             return iter(str(e).splitlines())
-
-    def run_command_in_console(command, comment=False, cons="console"):
+        
+    def run_command_in_console(command, comment=False, shell=False, cons="console"):
         console.configure(state='normal')
         console.insert('end', '{} > '.format(cons) + command + '\n')
         if(not comment):
             command = command.split()
-            for line in run_command(command):
+            for line in run_command(command,shell=shell):
                 try:
                     string = line.decode('unicode_escape')
                 except Exception:
                     string = line
-                console.insert('end', '' + string)
+                console.insert('end', '' + str(string))
                 console.see(tk.END)
         #console.insert('1.0', 'console > ')
         console.configure(state='disabled')
@@ -214,7 +217,7 @@ def parameters_page(root):
                 #Move new file
                 move(abs_path, file_path)
     
-    ##############################
+    ##############################            
     
     class ServerEntryBox:
         
@@ -378,7 +381,7 @@ def parameters_page(root):
             
             #Inputs            
             #tc.rnet.missouri.edu tbg28 INPUT NONE General 2 40
-            params_pd = pd.read_csv(self.params_file ,delimiter=' ',\
+            params_pd = pd.read_csv(self.params_file ,delimiter=';',\
                            header=None,\
                            names = self.column_names)
             self.hostname.set(params_pd[self.column_names[0]].get(0))
@@ -405,7 +408,7 @@ def parameters_page(root):
                   self.nsg_app_name.get(), self.nsg_app_id.get(),\
                   self.use_ssh.get()]
             df = pd.DataFrame(d)
-            df.transpose().to_csv(self.params_file, sep=' ',\
+            df.transpose().to_csv(self.params_file, sep=';',\
                            header=None,index=False)
             
             """pycipres.conf
@@ -527,9 +530,26 @@ def parameters_page(root):
             return
         return
     
+    def run_locally_threaded():
+        
+        result = messagebox.askquestion("Run Model Locally", "Previous results may be overwritten. Are you sure you want to run the model locally?", icon='warning')
+        if result != 'yes':
+            return
+        
+        ThreadedTask(run_locally).start()
+    
     def run_locally():
+        runLocalButton.config(state=tk.DISABLED)
+        runServerButton.config(state=tk.DISABLED)
+        
+        display_app_status("Starting local run")
         save_params()
         run_command_in_console("Running code locally...", comment=True)
+        
+        run_command_in_console("nrniv main.hoc",shell=True)
+        
+        runLocalButton.config(state=tk.NORMAL)
+        runServerButton.config(state=tk.NORMAL)
     
     
     class ThreadedTask(threading.Thread):
@@ -543,6 +563,7 @@ def parameters_page(root):
         ThreadedTask(run_server).start()
     
     def run_server():
+        runLocalButton.config(state=tk.DISABLED)
         runServerButton.config(state=tk.DISABLED)
         port = 22
         testing = False
@@ -784,6 +805,7 @@ def parameters_page(root):
         
         run_command_in_console("", comment=True)
         run_command_in_console("Remote server process complete ", comment=True)
+        runLocalButton.config(state=tk.NORMAL)
         runServerButton.config(state=tk.NORMAL)
         #########
         
@@ -799,9 +821,9 @@ def parameters_page(root):
     configsButton.grid(column=2, row =0, padx=5, pady=5, sticky='WE')
     #configsButton.config(state=tk.DISABLED)
     
-    runLocalButton = tk.Button(top_option_frame, text="Save and Run Locally (Windows)", command=run_locally)
+    runLocalButton = tk.Button(top_option_frame, text="Save and Run Locally (Windows)", command=run_locally_threaded)
     runLocalButton.grid(column=0, row =1, padx=5, pady=5, sticky='WE')
-    runLocalButton.config(state=tk.DISABLED)
+    #runLocalButton.config(state=tk.DISABLED)
     
     runServerButton = tk.Button(top_option_frame, text="Save and Run on Remote Server", command=run_server_thread)
     runServerButton.grid(column=1, row =1, padx=5, pady=5, sticky='WE')
