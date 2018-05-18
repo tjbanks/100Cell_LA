@@ -11,7 +11,7 @@ base = None
 
 executables = [Executable("100Cell.py", base=base)]
 
-packages = ["idna","time","re","subprocess","threading","tempfile","shutil","os","random","numpy","pandas","paramiko","getpass","zipfile","tkinter"]
+packages = ["idna","time","re","subprocess","threading","tempfile","shutil","os","random","numpy","pandas","paramiko","getpass","zipfile","tkinter","tarfile"]
 options = {
     'build_exe': {    
         'packages':packages,

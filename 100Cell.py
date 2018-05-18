@@ -97,7 +97,7 @@ def menu_bar(root):
         print("hello!")
         
     def about():
-        messagebox.showinfo("About", "Simulation Builder written for:\nProfessor Satish Nair's Neural Engineering Laboratory\nat The University of Missouri\n\nWritten by: Tyler Banks\n\nContributors:\nFeng Feng\n\nInitial Neuron Code:  Feng et al. (2016)\n\nEmail tbg28@mail.missouri.edu with questions", icon='info')
+        messagebox.showinfo("About", "Simulation Builder written for:\nProfessor Satish Nair's Neural Engineering Laboratory\nat The University of Missouri\n\nWritten by: Tyler Banks\n\nContributors:\nBen Latimer\nFeng Feng\n\nInitial Neuron Code:  Feng et al. (2016)\n\nEmail tbg28@mail.missouri.edu with questions", icon='info')
 
     menubar = tk.Menu(root)
     
