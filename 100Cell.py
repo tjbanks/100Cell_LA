@@ -9,10 +9,11 @@ import re
 import subprocess
 import threading
 from tempfile import mkstemp
-from shutil import move
+from shutil import move, copyfile
 import os
 from os import fdopen, remove
 from random import randint
+from nsgclient import Client
 
 import pandas as pd
 import paramiko
@@ -22,7 +23,7 @@ import zipfile
 
 import tkinter as tk # this is for python3
 from tkinter import ttk
-from tkinter import messagebox
+from tkinter import messagebox, IntVar
 
 root = tk.Tk()
 
@@ -219,7 +220,7 @@ def parameters_page(root):
         
         def __init__(self, parent, display=False):
             self.params_file = "serverparams.csv"
-            self.column_names = ["hostname", "user", "password", "keyfile", "partition", "nodes", "cores"]
+            self.column_names = ["hostname", "user", "password", "keyfile", "partition", "nodes", "cores", "nsg_url", "nsg_user", "nsg_pass", "nsg_app","nsg_id","use_ssh"]
             self.load_file(parent)
             if display:
                 self.display(parent)
@@ -228,17 +229,37 @@ def parameters_page(root):
         def display(self, parent):
             
             top = self.top = tk.Toplevel(parent)
-            top.geometry('325x350')
+            top.geometry('325x400')
             top.resizable(0,0)
-            tk.Label(top, text='Server Properties').grid(row=0,column=0,sticky="WE",columnspan=2)
+            tk.Label(top, text='Server Connection Properties').grid(row=0,column=0,sticky="WE",columnspan=2)
+            
+            self.server_type = IntVar()
+            self.server_type.set(int(self.use_ssh.get())) #0 for nsg 1 for ssh
+            
+            def on_server_type_change():
+                if(self.server_type.get()==0):
+                    conn_option_frame.grid_forget()
+                    nsgconn_option_frame.grid(column=0,row=3,sticky='news',padx=10,pady=5,columnspan=2)
+                    self.use_ssh.set(str(0))
+                else:
+                    nsgconn_option_frame.grid_forget()
+                    conn_option_frame.grid(column=0,row=2,sticky='news',padx=10,pady=5,columnspan=2)
+                    self.use_ssh.set(str(1))
+                return
+            tk.Radiobutton(top, text="NSG", variable=self.server_type, command=on_server_type_change, value=0).grid(column=0,row=1)
+            tk.Radiobutton(top, text="Other (SSH)", variable=self.server_type, command=on_server_type_change, value=1).grid(column=1,row=1)
             
             conn_option_frame = tk.LabelFrame(top, text="Connection Parameters")
-            conn_option_frame.grid(column=0,row=1,sticky='news',padx=10,pady=5)
+            nsgconn_option_frame = tk.LabelFrame(top, text="NSG Connection Parameters")
+            if(self.use_ssh.get() is "0"):
+                nsgconn_option_frame.grid(column=0,row=3,sticky='news',padx=10,pady=5,columnspan=2)
+            else:
+                conn_option_frame.grid(column=0,row=2,sticky='news',padx=10,pady=5,columnspan=2)
             
             run_option_frame = tk.LabelFrame(top, text="Runtime Parameters")
-            run_option_frame.grid(column=0,row=2,sticky='news',padx=10,pady=5)
+            run_option_frame.grid(column=0,row=4,sticky='news',padx=10,pady=5,columnspan=2)
             
-            
+            ###GENERAL###
             l = tk.Label(conn_option_frame, text='Hostname',width=15, background='light gray')
             l.grid(row=2,column=0,pady=5,padx=5)
             l.config(relief=tk.GROOVE)
@@ -246,7 +267,7 @@ def parameters_page(root):
             self.host_e = tk.Entry(conn_option_frame,width=25,textvariable=self.hostname)
             self.host_e.grid(row=2,column=1,padx=5)
             
-            l = tk.Label(conn_option_frame, text='User',width=15, background='light gray')
+            l = tk.Label(conn_option_frame, text='Username',width=15, background='light gray')
             l.grid(row=3,column=0,pady=5,padx=5)
             l.config(relief=tk.GROOVE)
             
@@ -268,7 +289,45 @@ def parameters_page(root):
             self.key_e.grid(row=5,column=1,padx=5)
             
             
-
+            ####NSG###
+            
+            l = tk.Label(nsgconn_option_frame, text='Base URL',width=15, background='light gray')
+            l.grid(row=2,column=0,pady=5,padx=5)
+            l.config(relief=tk.GROOVE)
+            
+            self.nsg_url_e = tk.Entry(nsgconn_option_frame,width=25,textvariable=self.nsg_url)
+            self.nsg_url_e.grid(row=2,column=1,padx=5)
+            
+            l = tk.Label(nsgconn_option_frame, text='Username',width=15, background='light gray')
+            l.grid(row=3,column=0,pady=5,padx=5)
+            l.config(relief=tk.GROOVE)
+            
+            self.nsg_user_e = tk.Entry(nsgconn_option_frame,width=25,textvariable=self.nsg_user)
+            self.nsg_user_e.grid(row=3,column=1,padx=5)
+            
+            l = tk.Label(nsgconn_option_frame, text='Password',width=15, background='light gray')
+            l.grid(row=4,column=0,pady=5,padx=5)
+            l.config(relief=tk.GROOVE)
+            
+            self.nsg_pass_e = tk.Entry(nsgconn_option_frame,width=25,textvariable=self.nsg_password)
+            self.nsg_pass_e.grid(row=4,column=1,padx=5)
+                                    
+            l = tk.Label(nsgconn_option_frame, text='Application Name',width=15, background='light gray')
+            l.grid(row=5,column=0,pady=5,padx=5)
+            l.config(relief=tk.GROOVE)
+            
+            self.nsg_app_name_e = tk.Entry(nsgconn_option_frame,width=25,textvariable=self.nsg_app_name)
+            self.nsg_app_name_e.grid(row=5,column=1,padx=5)
+            
+            l = tk.Label(nsgconn_option_frame, text='Application ID',width=15, background='light gray')
+            l.grid(row=6,column=0,pady=5,padx=5)
+            l.config(relief=tk.GROOVE)
+            
+            self.nsg_app_id_e = tk.Entry(nsgconn_option_frame,width=25,textvariable=self.nsg_app_id)
+            self.nsg_app_id_e.grid(row=6,column=1,padx=5)
+            
+            
+            ####RUN PROPS#####
             l = tk.Label(run_option_frame, text='Partition',width=15, background='light gray')
             l.grid(row=2,column=0,pady=5,padx=5)
             l.config(relief=tk.GROOVE)
@@ -309,6 +368,12 @@ def parameters_page(root):
             self.partition = tk.StringVar(top)
             self.nodes = tk.StringVar(top)
             self.cores = tk.StringVar(top)
+            self.nsg_url = tk.StringVar(top)
+            self.nsg_user = tk.StringVar(top)
+            self.nsg_password = tk.StringVar(top)
+            self.nsg_app_name = tk.StringVar(top)
+            self.nsg_app_id = tk.StringVar(top)
+            self.use_ssh = tk.StringVar(top)
             self.confirm = False
             
             #Inputs            
@@ -323,16 +388,41 @@ def parameters_page(root):
             self.partition.set(params_pd[self.column_names[4]].get(0))
             self.nodes.set(params_pd[self.column_names[5]].get(0))
             self.cores.set(params_pd[self.column_names[6]].get(0))
+            self.nsg_url.set(params_pd[self.column_names[7]].get(0))
+            self.nsg_user.set(params_pd[self.column_names[8]].get(0))
+            self.nsg_password.set(params_pd[self.column_names[9]].get(0))
+            self.nsg_app_name.set(params_pd[self.column_names[10]].get(0))
+            self.nsg_app_id.set(params_pd[self.column_names[11]].get(0))
+            self.use_ssh.set(params_pd[self.column_names[12]].get(0))
             
         def save_file(self):
+            nsg_file = "pycipres.conf"
             d = [self.hostname.get(), self.user.get(),\
                   self.password.get(), self.keyfile.get(),\
                   self.partition.get(), self.nodes.get(),\
-                  self.cores.get()]
+                  self.cores.get(), self.nsg_url.get(),\
+                  self.nsg_user.get(), self.nsg_password.get(),\
+                  self.nsg_app_name.get(), self.nsg_app_id.get(),\
+                  self.use_ssh.get()]
             df = pd.DataFrame(d)
             df.transpose().to_csv(self.params_file, sep=' ',\
                            header=None,index=False)
+            
+            """pycipres.conf
+            APPNAME:app-name
+            APPID:app-id
+            USERNAME:user
+            PASSWORD:pass
+            URL:https://nsgr.sdsc.edu:8443/cipresrest/v1
+            
+            with open(nsg_file, 'w') as the_file:
+                the_file.write('{}:{}\n'.format("APPNAME",self.nsg_app_name.get()))
+                the_file.write('{}:{}\n'.format("APPID",self.nsg_app_id.get()))
+                the_file.write('{}:{}\n'.format("USERNAME",self.nsg_user.get()))
+                the_file.write('{}:{}\n'.format("PASSWORD",self.nsg_password.get()))
+                the_file.write('{}:{}\n'.format("URL",self.nsg_url.get()))
             return
+            """
         
         def verify_good(self):
             return True
@@ -460,6 +550,9 @@ def parameters_page(root):
         zip_dir = '100Cell_LA_RUN_RESULTS-'+str(randint(0, 9999))
         zip_file = zip_dir+'.zip'
         remote_dir = "100Cell_LA_remote"
+        nsg_template_dir = "nsg-template-dir"
+        nsg_template_param_file = "param.properties"
+        nsg_template_input_file = "input.properties"
         
         save_params()
         run_command_in_console("Initiating remote server process...", comment=True)
@@ -486,152 +579,208 @@ def parameters_page(root):
         zipdir(dir_path, zipf)
         zipf.close()
         run_command_in_console("Code written to {}".format("../"+zip_file), comment=True)
-        
-        
-        run_command_in_console("Connecting to {}...".format(d.hostname.get()), comment=True)
-        try:
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            password = d.password.get()
-            
-            if(password is "INPUT"):
-                password = getpass.getpass('Password for %s@%s: ' % (d.user.get(), d.hostname.get()))
-            if(not testing):
-                print("keyfile: " + d.keyfile.get())
-                if(d.keyfile.get() == 'NONE'):
-                    print("no keyfile")
-                    client.connect(d.hostname.get(), port=port, username=d.user.get(), password=password)
-                else:
-                    k = paramiko.RSAKey.from_private_key_file(d.keyfile.get(), password)
-                    client.connect(d.hostname.get(), port=port, username=d.user.get(), pkey=k)
-                #chan.close()
-                #client.close()
-            
-            
-            
-            run_command_in_console("Uploading code to {}".format(d.hostname.get()), comment=True)
-            client.exec_command('mkdir '+ remote_dir)
-            rem_loc = "./"+remote_dir+"/"+zip_file
-            #print(rem_loc)
-            ftp_client=client.open_sftp()
-            ftp_client.put("../"+zip_file,rem_loc)
-            ftp_client.close()
-            
-            os.remove("../"+zip_file)
-            
-            run_command_in_console("Unzipping and running code ", comment=True, cons=d.hostname.get())
-            
-            #chan = client.invoke_shell()
-            #unzip -o -d file file.zip
-            command = 'unzip -o -d '+remote_dir+'/'+zip_dir+' '+remote_dir+'/'+zip_file
-            #print("Executing {}".format( command ))
-            stdin , stdout, stderr = client.exec_command(command)
-            exit_status = stdout.channel.recv_exit_status()          # Blocking call
-            if exit_status == 0:
-                print ("executed " + command)
-            else:
-                print("Error executing " + command + " Error: " , exit_status)
+#NSG####################################        
+        if(d.use_ssh.get() is "0"):#NSG
+            try:
+                run_command_in_console("Connecting to NSG using API URL {}".format(d.nsg_url.get()), comment=True)
                 
-            command = 'sbatch ' + remote_dir+'/'+zip_dir+'/'+batch_file
-            #print("Executing {}".format( command ))
-            stdin , stdout, stderr = client.exec_command(command)
-            exit_status = stdout.channel.recv_exit_status()          # Blocking call
-            batch_id = '-1'
-            if exit_status == 0:
-                print ("executed " + command)
-                batch_id = stdout.readline()
-                batch_id = batch_id.replace("Submitted batch job ", "")
-                batch_id = batch_id.replace("\n", "")
-            else:
-                print("Error executing " + command + " Error: " , exit_status)
-                for line in stderr.readlines():
-                    print(line)
+                nsg = Client(d.nsg_app_name.get(), d.nsg_app_id.get(), d.nsg_user.get(), d.nsg_password.get(), d.nsg_url.get())
+                run_command_in_console("Listing Current Jobs: {}".format(nsg.listJobs()))
+                
+                
+                run_command_in_console("Creating NSG Job", comment=True)
+                #copy code to nsg dir
+                src = "../"+zip_file
+                dst = os.path.join(nsg_template_dir,zip_file)
+                copyfile(src, dst)
+                #generate new properties
+                with open(os.path.join(nsg_template_dir,nsg_template_input_file), 'w') as the_file:
+                    the_file.write('{}={}\n'.format("infile_",zip_file))
+                with open(os.path.join(nsg_template_dir,nsg_template_param_file), 'w') as the_file:
+                    the_file.write('{}={}\n'.format("toolId","NEURON75_TG"))
+                    the_file.write('{}={}\n'.format("filename_","./main.hoc"))
+                    the_file.write('{}={}\n'.format("number_nodes_",d.nodes.get()))
+                    the_file.write('{}={}\n'.format("number_cores_",d.cores.get()))
+                    the_file.write('{}={}\n'.format("pythonoption_","0"))
+                    the_file.write('{}={}\n'.format("outputfilename_",zip_dir))
+                    the_file.write('{}={}\n'.format("runtime_","1"))
+                    the_file.write('{}={}\n'.format("singlelayer_","0")) 
                     
-            #Submitted batch job 18214
-            print('running sbatch process: ' + batch_id)
-
-            #######################
-            #KEEP CHECKING TO SEE IF DONE
-            done = False
-            command = 'squeue'
-            while(not done):
+                #validate
+                run_command_in_console("Validating job, waiting for completion...", comment=True)
+                status = nsg.validateJobTemplate(nsg_template_dir)
+                #status.waitForCompletion(pollInterval=10)
+                run_command_in_console("Error?: " + str(status.isError()))
+                #submit
+                run_command_in_console("Validating complete...", comment=True)
+                run_command_in_console("Starting job", comment=True)
+                status = nsg.submitJobTemplate(nsg_template_dir,metadata={"statusEmail" : "false"})
+                
+                run_command_in_console("Waiting for job to complete, checking every 60 seconds. Please wait, this may take a while.", comment=True)
+                status.waitForCompletion(pollInterval=60)
+                run_command_in_console("Error?: " + str(status.isError()))
+                
+                run_command_in_console("Job Complete", comment=True)
+                #delete zip files in parent directory and in nsg-template-dir
+                os.remove(src)
+                os.remove(dst)
+                
+                run_command_in_console("Downloading results from NSG", comment=True)
+                #store file in parent directory
+                status.downloadResults(directory="../")
+                run_command_in_console("Extracted results in parent directory", comment=True)
+                
+                run_command_in_console("Closing connection to NSG", comment=True)
+            except Exception as e:
+                run_command_in_console("Error, Exception caught: {}\n\n".format(e))
+            
+#SSH######################################
+        else:#SSH
+            run_command_in_console("Connecting to {}...".format(d.hostname.get()), comment=True)
+            try:
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                password = d.password.get()
+                
+                if(password is "INPUT"):
+                    password = getpass.getpass('Password for %s@%s: ' % (d.user.get(), d.hostname.get()))
+                if(not testing):
+                    print("keyfile: " + d.keyfile.get())
+                    if(d.keyfile.get() == 'NONE'):
+                        print("no keyfile")
+                        client.connect(d.hostname.get(), port=port, username=d.user.get(), password=password)
+                    else:
+                        k = paramiko.RSAKey.from_private_key_file(d.keyfile.get(), password)
+                        client.connect(d.hostname.get(), port=port, username=d.user.get(), pkey=k)
+                    #chan.close()
+                    #client.close()
+                
+                
+                
+                run_command_in_console("Uploading code to {}".format(d.hostname.get()), comment=True)
+                client.exec_command('mkdir '+ remote_dir)
+                rem_loc = "./"+remote_dir+"/"+zip_file
+                #print(rem_loc)
+                ftp_client=client.open_sftp()
+                ftp_client.put("../"+zip_file,rem_loc)
+                ftp_client.close()
+                
+                os.remove("../"+zip_file)
+                
+                run_command_in_console("Unzipping and running code ", comment=True, cons=d.hostname.get())
+                
+                #chan = client.invoke_shell()
+                #unzip -o -d file file.zip
+                command = 'unzip -o -d '+remote_dir+'/'+zip_dir+' '+remote_dir+'/'+zip_file
+                #print("Executing {}".format( command ))
                 stdin , stdout, stderr = client.exec_command(command)
                 exit_status = stdout.channel.recv_exit_status()          # Blocking call
                 if exit_status == 0:
-                    #print("Checking for completion of " + batch_id + " with " + command)
-                    lines = stdout.readlines()
-                    done = True
-                    for line in lines:
-                        if(batch_id in line):
-                            done = False
+                    print ("executed " + command)
+                else:
+                    print("Error executing " + command + " Error: " , exit_status)
+                    
+                command = 'sbatch ' + remote_dir+'/'+zip_dir+'/'+batch_file
+                #print("Executing {}".format( command ))
+                stdin , stdout, stderr = client.exec_command(command)
+                exit_status = stdout.channel.recv_exit_status()          # Blocking call
+                batch_id = '-1'
+                if exit_status == 0:
+                    print ("executed " + command)
+                    batch_id = stdout.readline()
+                    batch_id = batch_id.replace("Submitted batch job ", "")
+                    batch_id = batch_id.replace("\n", "")
+                else:
+                    print("Error executing " + command + " Error: " , exit_status)
+                    for line in stderr.readlines():
+                        print(line)
+                        
+                #Submitted batch job 18214
+                print('running sbatch process: ' + batch_id)
+    
+                #######################
+                #KEEP CHECKING TO SEE IF DONE
+                done = False
+                command = 'squeue'
+                while(not done):
+                    stdin , stdout, stderr = client.exec_command(command)
+                    exit_status = stdout.channel.recv_exit_status()          # Blocking call
+                    if exit_status == 0:
+                        #print("Checking for completion of " + batch_id + " with " + command)
+                        lines = stdout.readlines()
+                        done = True
+                        for line in lines:
+                            if(batch_id in line):
+                                done = False
+                    else:
+                        print("Error", exit_status)
+                        for line in stderr.readlines():
+                            print(line)
+                    if(not done):
+                        run_command_in_console("sbatch process " + batch_id + " still running. Checking again in 5 seconds...", comment=True, cons=d.hostname.get())
+                        time.sleep(5)
+                        #command = './squeue-done'
+                #######################
+                
+                run_command_in_console("Code run complete. Compressing results.", comment=True, cons=d.hostname.get())
+                
+                command = 'rm -rf '+remote_dir+'/'+zip_file
+                print("Executing {}".format( command ))
+                stdin , stdout, stderr = client.exec_command(command)
+                exit_status = stdout.channel.recv_exit_status()          # Blocking call
+                if exit_status == 0:
+                    print ("executed")
+                else:
+                    print("Error", exit_status)
+                
+                command = "zip -r "+remote_dir+'/'+zip_file+" "+remote_dir+"/"+zip_dir + " -i " + "'*.m' '*.mat' '*.txt' '*.out' '*.dat' '*data*' '*Matrix_NEW*'"
+                print("Executing {}".format( command ))
+                stdin , stdout, stderr = client.exec_command(command)
+                exit_status = stdout.channel.recv_exit_status()          # Blocking call
+                if exit_status == 0:
+                    print ("executed")
                 else:
                     print("Error", exit_status)
                     for line in stderr.readlines():
                         print(line)
-                if(not done):
-                    run_command_in_console("sbatch process " + batch_id + " still running. Checking again in 5 seconds...", comment=True, cons=d.hostname.get())
-                    time.sleep(5)
-                    #command = './squeue-done'
-            #######################
-            
-            run_command_in_console("Code run complete. Compressing results.", comment=True, cons=d.hostname.get())
-            
-            command = 'rm -rf '+remote_dir+'/'+zip_file
-            print("Executing {}".format( command ))
-            stdin , stdout, stderr = client.exec_command(command)
-            exit_status = stdout.channel.recv_exit_status()          # Blocking call
-            if exit_status == 0:
-                print ("executed")
-            else:
-                print("Error", exit_status)
-            
-            command = "zip -r "+remote_dir+'/'+zip_file+" "+remote_dir+"/"+zip_dir + " -i " + "'*.m' '*.mat' '*.txt' '*.out' '*.dat' '*data*' '*Matrix_NEW*'"
-            print("Executing {}".format( command ))
-            stdin , stdout, stderr = client.exec_command(command)
-            exit_status = stdout.channel.recv_exit_status()          # Blocking call
-            if exit_status == 0:
-                print ("executed")
-            else:
-                print("Error", exit_status)
-                for line in stderr.readlines():
-                    print(line)
-                    
-            run_command_in_console("Downloading results ", comment=True)
-            rem_loc = "./"+remote_dir+"/"+zip_file
-            ftp_client=client.open_sftp()
-            ftp_client.get(rem_loc,"../"+zip_file)
-            ftp_client.close()
-            
-            zip_ref = zipfile.ZipFile("../"+zip_file, 'r')
-            zip_ref.extractall("../"+zip_dir)
-            zip_ref.close()
                         
-            os.remove("../"+zip_file)
-            
-            run_command_in_console("Results saved to parent directory in folder: {}".format(zip_dir), comment=True)
-            
-            
-            run_command_in_console("Cleaning up files", comment=True, cons=d.hostname.get())
-            
-            command = 'rm -rf '+remote_dir+'/'+zip_dir+'*'
-            print("Executing {}".format( command ))
-            stdin , stdout, stderr = client.exec_command(command)
-            exit_status = stdout.channel.recv_exit_status()          # Blocking call
-            if exit_status == 0:
-                print ("executed")
-            else:
-                print("Error", exit_status)
+                run_command_in_console("Downloading results ", comment=True)
+                rem_loc = "./"+remote_dir+"/"+zip_file
+                ftp_client=client.open_sftp()
+                ftp_client.get(rem_loc,"../"+zip_file)
+                ftp_client.close()
                 
-            run_command_in_console("Disconnecting from : {}".format(d.hostname.get()), comment=True)
-            client.close()
-            
-        except Exception as e:
-            run_command_in_console('*** Caught exception: %s: %s' % (e.__class__, e))
-            #traceback.print_exc()
-            try:
+                zip_ref = zipfile.ZipFile("../"+zip_file, 'r')
+                zip_ref.extractall("../"+zip_dir)
+                zip_ref.close()
+                            
+                os.remove("../"+zip_file)
+                
+                run_command_in_console("Results saved to parent directory in folder: {}".format(zip_dir), comment=True)
+                
+                
+                run_command_in_console("Cleaning up files", comment=True, cons=d.hostname.get())
+                
+                command = 'rm -rf '+remote_dir+'/'+zip_dir+'*'
+                print("Executing {}".format( command ))
+                stdin , stdout, stderr = client.exec_command(command)
+                exit_status = stdout.channel.recv_exit_status()          # Blocking call
+                if exit_status == 0:
+                    print ("executed")
+                else:
+                    print("Error", exit_status)
+                    
+                run_command_in_console("Disconnecting from : {}".format(d.hostname.get()), comment=True)
                 client.close()
-            except:
-                pass
+                #END SSH CLIENT
+            
+            except Exception as e:
+                run_command_in_console('*** Caught exception: %s: %s' % (e.__class__, e))
+                #traceback.print_exc()
+                try:
+                    client.close()
+                except:
+                    pass
         
         run_command_in_console("", comment=True)
         run_command_in_console("Remote server process complete ", comment=True)
